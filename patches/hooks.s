@@ -100,7 +100,46 @@ s2_conn_interval:
 _hook_start_pairing:
     tjl     s2_start_pairing_hook
 
-    .section .hook_pair_mac_inc, "ax"
+/* Home Ring PWM5: preserve stock on/off and pairing-blink control flow. */
+    .section .hook_home_ring_blink_off, "ax"
+    .global _hook_home_ring_blink_off
+_hook_home_ring_blink_off:
+    tpush   {lr}
+    tmovs   r0, #0
+    tjl     home_ring_blink_go
+    .short  0x06c0
+    .short  0x06c0
+
+    .section .hook_home_ring_blink_on, "ax"
+    .global _hook_home_ring_blink_on
+_hook_home_ring_blink_on:
+    tpush   {lr}
+    tmovs   r0, #1
+    tjl     home_ring_blink_go
+    .short  0x06c0
+    .short  0x06c0
+    .short  0x06c0
+    .short  0x06c0
+
+    .section .hook_home_ring_solid_off, "ax"
+    .global _hook_home_ring_solid_off
+_hook_home_ring_solid_off:
+    tjl     home_ring_maybe_off
+
+    .section .hook_home_ring_solid_on, "ax"
+    .global _hook_home_ring_solid_on
+_hook_home_ring_solid_on:
+    tjl     home_ring_maybe_on
+
+    .section .hook_home_ring_init, "ax"
+    .global _hook_home_ring_init
+_hook_home_ring_init:
+    tjl     home_ring_setup
+    .short  0x06c0
+    .short  0x06c0
+    .short  0x06c0
+
+.section .hook_pair_mac_inc, "ax"
     .global _hook_pair_mac_inc
 _hook_pair_mac_inc:
     tjl     stock_noop /* Per-slot Pair MAC bump is handled in s2_bt_mac_init_hook */

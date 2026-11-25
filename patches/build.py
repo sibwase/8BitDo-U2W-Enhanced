@@ -36,6 +36,18 @@ ELITE_HOOK_STOCK = {
     ".elite_map_ptr": "d8 b4 01 00",
 }
 
+# Exact stock-v1.10 bytes at the five Home Ring call sites. These guards are
+# mandatory: a different base image or a changed function layout must fail closed.
+HOME_RING_HOOK_STOCK = {
+    ".hook_home_ring_blink_off": "0f 0b 1a 48 20 a1 8a 03 1a 40 d7 87",
+    ".hook_home_ring_blink_on":  "08 0b 19 48 20 a2 0a 03 12 f6 12 fe 1a 40 c7 87",
+    ".hook_home_ring_solid_off": "1b f4 19 fc",
+    ".hook_home_ring_solid_on":  "1b f4 1a fc",
+    ".hook_home_ring_init":     "10 a2 0a 03 12 f6 12 fe 1a 40",
+}
+HOME_RING_INIT_CONT_ADDR = 0x0F726
+HOME_RING_INIT_CONT_STOCK = bytes.fromhex("00 6d")  # stock tpop {pc}
+
 STOCK_SYMS = {
     "stock_ll_init_slave": 0x161BC,
     "stock_matrix_set_all_columns": 0x0ED74,
@@ -64,6 +76,7 @@ STOCK_SYMS = {
     "stock_profile_led_slot": 0x0DA74,
     "stock_is_non_ble": 0x0EEF8,
     "stock_set_rumble": 0x12220,
+    "gpio_set_func": 0x129CC,  # Stock U2W v1.10 GPIO mux helper, used by PWM5 setup.
     "stock_ble_rumble": 0x0D534,
     "stock_hid_name": 0x1B468,
     "stock_hid_map": 0x1B4D8,
@@ -148,6 +161,10 @@ def main() -> int:
     run([gcc, "-x", "assembler-with-cpp", *defines, "-c", str(PATCHES / "hooks.s"), "-o", str(hooks_o)])
     objs.append(str(hooks_o))
 
+    home_ring_o = build / "home_ring.o"
+    run([gcc, "-x", "assembler-with-cpp", "-c", str(PATCHES / "home_ring.s"), "-o", str(home_ring_o)])
+    objs.append(str(home_ring_o))
+
     elf = build / "patch.elf"
     ld_cmd = [ld, "-N", "-T", str(PATCHES / "link.ld"), "--no-check-sections"]
     for name, addr in STOCK_SYMS.items():
@@ -192,13 +209,31 @@ def main() -> int:
             expected = bytes.fromhex(ELITE_HOOK_STOCK[sec])
             if len(blob) != len(expected) or buf[img_off : img_off + len(expected)] != expected:
                 raise RuntimeError(f"stock bytes differ at {sec} ({flash_addr:#x})")
+        if sec in HOME_RING_HOOK_STOCK:
+            expected = bytes.fromhex(HOME_RING_HOOK_STOCK[sec])
+            if len(blob) != len(expected):
+                raise RuntimeError(
+                    f"Home Ring hook {sec} assembled to {len(blob)} bytes; expected exactly {len(expected)}"
+                )
+            if buf[img_off : img_off + len(expected)] != expected:
+                raise RuntimeError(
+                    f"stock bytes differ at Home Ring hook {sec} ({flash_addr:#x}); refusing to patch"
+                )
         buf[img_off : img_off + len(blob)] = blob
         patch_sections.append({
             "name": sec,
             "flash_addr": flash_addr,
             "data_hex": blob.hex(),
         })
-        print(f"patched {sec:20s} @ flash {flash_addr:#07x} ({len(blob):4d} bytes)")
+        print(f"patched {sec:30s} @ flash {flash_addr:#07x} ({len(blob):4d} bytes)")
+
+    # The init hook must return to the original stock epilogue. This guard is
+    # outside the overwritten hook and catches accidental hook-length drift.
+    guard_off = HOME_RING_INIT_CONT_ADDR - APP_START
+    if stock[guard_off : guard_off + len(HOME_RING_INIT_CONT_STOCK)] != HOME_RING_INIT_CONT_STOCK:
+        raise RuntimeError(
+            f"stock bytes after Home Ring init hook differ at {HOME_RING_INIT_CONT_ADDR:#x}; refusing to patch"
+        )
 
     patched = validate_and_fix_image(buf, stock, fix_sums=True)
     out_path = build / "u2w-1.10-switch2-ble.image.bin"

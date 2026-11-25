@@ -23,6 +23,11 @@ Unofficial open-source Telink TLSR8258 firmware patches for the **8BitDo Ultimat
   - **Battery level reporting** and stock front profile LED behavior
 - **Linux / Steam Input Bluetooth PnP ID fix:**
   - Fixes stock v1.10's invalid BLE PnP ID Vendor Source byte (`0x12` → `0x02`) so Linux BlueZ properly exposes `2dc8:6012`, allowing Steam's `udev` rules (`60-steam-input.rules`) to grant `hidraw` access for native Steam Input gyro and all 4 extra buttons (`L4`, `R4`, `PL`, `PR`) over Bluetooth
+- **Home Ring low-brightness mode:**
+  - Routes the Home/link ring through PWM5 on PB5.
+  - Uses 1% duty when the stock firmware requests the ring ON, and 0% when it requests OFF.
+  - Keeps the stock pairing blink timing; only the ON intensity is reduced.
+  - The implementation is transport/profile-independent and is intended to cover Stock BLE, Xbox Elite BLE, Switch 2 BLE, 2.4G, and USB because it hooks the shared stock ring-control paths. Verify each mode on hardware before relying on it.
 - **Experimental Xbox Elite Series 2 BLE mode (`8BitDo Ultimate 2 Xbox`):**
   - Emulates Xbox Elite Series 2 (`045e:0b05`) over BLE based on the [8bitdo-ultimate-toolkit](https://github.com/craigmdennis/8bitdo-ultimate-toolkit/blob/u2w-xbox-rumble/u2w_xbox/README.md) report format
   - Exposes **rumble** (both Apple Core Haptics quadratic and SDL linear scaling), **battery level**, and **all 4 independent rear/extra paddles (`P1`–`P4`)**
@@ -118,6 +123,7 @@ cc -std=gnu99 -Wall -Wextra -Werror -DHOST_TEST \
     patches/elite.c patches/test_elite.c -o /tmp/test_elite
 /tmp/test_elite
 python3 patches/test_csa2.py
+python3 patches/test_home_ring.py
 
 # Build patched image and regenerate dist/u2w-v1.10-switch2.patch.json
 python3 patches/build.py \

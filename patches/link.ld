@@ -22,6 +22,7 @@ SECTIONS
     /* 12 KiB zero cave inside bootloader-covered Telink flash [0x5000, 0x1ca60) */
     . = 0x0000a040;
     .cave : {
+        *(.cave.home_ring)
         *(.cave.init)
         *(.cave.csa2)
         *(.cave.interval)
@@ -74,6 +75,18 @@ SECTIONS
     .hook_start_pairing : { *(.hook_start_pairing) }
 
     .hook_elite_notify 0x0000e460 : { *(.hook_elite_notify) }
+
+    /* Home Ring: five stock-v1.10 call sites, guarded byte-for-byte in build.py. */
+    . = 0x0000f54a;
+    .hook_home_ring_blink_off : { *(.hook_home_ring_blink_off) }
+    . = 0x0000f566;
+    .hook_home_ring_blink_on : { *(.hook_home_ring_blink_on) }
+    . = 0x0000f5ca;
+    .hook_home_ring_solid_off : { *(.hook_home_ring_solid_off) }
+    . = 0x0000f5ea;
+    .hook_home_ring_solid_on : { *(.hook_home_ring_solid_on) }
+    . = 0x0000f71c;
+    .hook_home_ring_init : { *(.hook_home_ring_init) }
 
     /* Suppress global Pair MAC increment at 0xfab0 (replaced by per-slot mac_gen). */
     . = 0x0000fab0;
